@@ -4,7 +4,7 @@ import pickle
 from dotenv import load_dotenv
 
 # Langchain imports
-from langchain_community.document_loaders import TextLoader
+from langchain.document_loaders import PyPDFLoader
 from langchain.indexes import VectorstoreIndexCreator
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -40,9 +40,9 @@ llm = WatsonxLLM(
 """RAG PART BELOW"""
 
 # Doc to Vector function [TODO BROKEN]
-def load_doc(doc_loc, filetype='txt'):
+def load_doc(doc_loc, index_loc, filetype='txt'):
     # Define a path to save/load the vector index
-    index_file = f"DB/HGB_cpu.index"
+    index_file = index_loc
 
     # Check if the index already exists
     if os.path.exists(index_file):
@@ -50,18 +50,26 @@ def load_doc(doc_loc, filetype='txt'):
         with open(index_file, 'rb') as f:
             index = pickle.load(f)
     else:
-        # Open the txt/pdf file
+        # Open the txt file
         if filetype == 'txt':
             with open(doc_loc, 'r', encoding='utf-8') as file:
-                doc = Document(page_content=file.read())
-        elif filetype == 'pdf':
-            pass  # implement pdf loader here if needed
+                doc = [Document(page_content=file.read())]
 
-        # Create vector database from the doc using HF embeddings
-        index = VectorstoreIndexCreator(
-            embedding=HuggingFaceEmbeddings(model_name='all-MiniLM-L12-v2'),
-            text_splitter=RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=0)
-        ).from_documents([doc])
+            # Create vector database from the doc using HF embeddings
+            index = VectorstoreIndexCreator(
+                embedding=HuggingFaceEmbeddings(model_name='all-MiniLM-L12-v2'),
+                text_splitter=RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=0)
+            ).from_documents(doc)
+
+        # Open the pdf file
+        elif filetype == 'pdf':
+            loader = [PyPDFLoader(doc_loc)]
+
+            # Create vector database from the loader using HF embeddings
+            index = VectorstoreIndexCreator(
+                embedding=HuggingFaceEmbeddings(model_name='all-MiniLM-L12-v2'),
+                text_splitter=RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=0)
+            ).from_loaders(loader)
         
         # Save the index for future use
         with open(index_file, 'wb') as f:
