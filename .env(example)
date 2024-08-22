@@ -1,0 +1,4 @@
+API_KEY=YOUR_API_KEY
+URL_IBM=https://jp-tok.ml.cloud.ibm.com
+PROJECT_ID=YOUR_PRODUCT
+DOC_LOC=DB/hgb.txt
