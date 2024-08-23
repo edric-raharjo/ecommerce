@@ -33,13 +33,13 @@ os.environ["WATSONX_APIKEY"] = os.getenv('API_KEY')
 # Set LLM Parameters
 parameters = {
     "decoding_method": "sample",
-    "max_new_tokens": 300,
+    "max_new_tokens": 500,
     "temperature": 0.95
 }
 
 # Create LLM instance
 llm = WatsonxLLM(
-    model_id = "meta-llama/llama-2-70b-chat",
+    model_id = "meta-llama/llama-3-1-70b-instruct",
     url = os.getenv('URL_IBM'),
     project_id = os.getenv('PROJECT_ID'),
     params=parameters
@@ -136,7 +136,7 @@ index = load_doc(doc_loc,'DB/ecommerce_300_index','pdf','FAISS')
 # load the retriever
 retriever = index.as_retriever(
     search_type="similarity",
-    search_kwargs={"k": 1},
+    search_kwargs={"k": 3},
 )
 
 # Load the Prompt Template
@@ -144,6 +144,7 @@ retrieval_qa_chat_prompt = ChatPromptTemplate.from_template(
     """
     Answer the following question based only on the provided context. 
     Think step by step before providing a detailed answer. 
+    DO NOT WRITE A QUESTION, JUST GIVE THE ANSWER IN A DETAILED MANNER
     <context>
     {context}
     </context>
