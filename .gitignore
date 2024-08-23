@@ -1,1 +1,5 @@
+DB/HGB.index
 DB/HGB_cpu.index
+DB/hgb.txt
+.env
+__pycache__/*
