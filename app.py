@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 
-from chat import chain
+from chat import retrieval_chain
 
 # Setup the app title
 st.title('IISMA E-Commerce Website')
@@ -27,7 +27,7 @@ if prompt:
     st.session_state.messages.append({'role':'user','content':prompt})
 
     # Get reply
-    response = chain.invoke({"input": prompt})['answer']
+    response = retrieval_chain.invoke({"input": prompt})['answer']
     # Display reply
     st.chat_message('assistant').markdown(response)
     # Store replies
