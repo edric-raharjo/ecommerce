@@ -2,4 +2,4 @@ DB/HGB.index
 DB/HGB_cpu.index
 DB/hgb.txt
 .env
-__pycache__/*
+__pycache__/chat.cpython-310.pyc
