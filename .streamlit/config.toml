@@ -1,3 +1,20 @@
 [theme]
-base="dark"
-primaryColor="purple"
+# The preset Streamlit theme that your custom theme inherits from.
+# One of "light" or "dark".
+base = "light"
+
+# Primary accent color for interactive elements (e.g., buttons, sliders).
+primaryColor = "#1a73e8"  # A professional blue, often used in corporate settings
+
+# Background color for the main content area.
+backgroundColor = "#ffffff"  # A clean, white background for a professional look
+
+# Background color used for the sidebar and most interactive widgets.
+secondaryBackgroundColor = "#f5f5f5"  # A very light gray, adding subtle warmth while maintaining formality
+
+# Color used for almost all text.
+textColor = "#333333"  # A strong, dark gray for clear, professional text
+
+# Font family for all text in the app, except code blocks. One of "sans serif",
+# "serif", or "monospace".
+font = "serif"
