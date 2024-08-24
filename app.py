@@ -1,9 +1,10 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
 import os
 
-from chat import retrieval_chain
+from chat import WatsonxLLMHandler 
+
+# Initialize the WatsonxLLMHandler class
+llm_handler = WatsonxLLMHandler()
 
 # Setup the app title
 st.title('IISMA E-Commerce Website')
@@ -24,12 +25,16 @@ if prompt:
     # Display prompt
     st.chat_message('user').markdown(prompt)
     # Store user prompt
-    st.session_state.messages.append({'role':'user','content':prompt})
+    st.session_state.messages.append({'role': 'user', 'content': prompt})
+
+    # Get the retrieval chain
+    vector_store_loc = 'DB/ecommerce_300_index'  # Set the location of your vector store
+    retrieval_chain = llm_handler.create_retrieval_chain(vector_store_loc, filetype='pdf', method='FAISS')
 
     # Get reply
     response = retrieval_chain.invoke({"input": prompt})['answer']
+
     # Display reply
     st.chat_message('assistant').markdown(response)
     # Store replies
-    st.session_state.messages.append({'role':'assistant','content':response})
-
+    st.session_state.messages.append({'role': 'assistant', 'content': response})
