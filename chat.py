@@ -5,6 +5,7 @@ import torch
 import faiss
 from uuid import uuid4
 from dotenv import load_dotenv
+import random
 
 # Langchain imports
 from langchain_community.document_loaders import TextLoader
@@ -24,143 +25,108 @@ from langchain import hub
 from langchain_ibm import WatsonxLLM
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# load .env file
-load_dotenv()
+class WatsonxLLMHandler:
+    def __init__(self):
+        # Load environment variables
+        load_dotenv()
+        self.api_key = os.getenv('API_KEY')
+        self.url = os.getenv('URL_IBM')
+        self.project_id = os.getenv('PROJECT_ID')
+        self.doc_loc = os.getenv('DOC_LOC')
 
-## Get API KEY
-os.environ["WATSONX_APIKEY"] = os.getenv('API_KEY')
+        # Set LLM parameters
+        self.parameters = {
+            "decoding_method": "sample",
+            "max_new_tokens": 500,
+            "temperature": 0.95
+        }
 
-# Set LLM Parameters
-parameters = {
-    "decoding_method": "sample",
-    "max_new_tokens": 500,
-    "temperature": 0.95
-}
+        # Create LLM instance
+        self.llm = WatsonxLLM(
+            model_id="meta-llama/llama-3-1-70b-instruct",
+            url=self.url,
+            project_id=self.project_id,
+            params=self.parameters
+        )
 
-# Create LLM instance
-llm = WatsonxLLM(
-    model_id = "meta-llama/llama-3-1-70b-instruct",
-    url = os.getenv('URL_IBM'),
-    project_id = os.getenv('PROJECT_ID'),
-    params=parameters
-)
+        # Load Embeddings
+        self.embeddings = HuggingFaceEmbeddings(model_name='all-MiniLM-L12-v2')
 
-"""RAG PART BELOW"""
-# Load Embeddings 
-embeddings = HuggingFaceEmbeddings(model_name='all-MiniLM-L12-v2')
+    def load_doc(self, doc_loc, vector_store_loc, filetype='txt', method='reg'):
+        vector_store_file = vector_store_loc
 
-# Doc to Vector function 
-def load_doc(doc_loc, vector_store_loc, filetype='txt', method='reg'):
-    # Define a path to save/load the vector index
-    vector_store_file = vector_store_loc
+        # Check if the index already exists
+        if os.path.exists(vector_store_file):
+            try:
+                with open(vector_store_file, 'rb') as f:
+                    vector_store = pickle.load(f)
+                return vector_store
+            except PermissionError:
+                vector_store = FAISS.load_local(vector_store_loc, self.embeddings, allow_dangerous_deserialization=True)
+        else:
+            if filetype == 'txt':
+                with open(doc_loc, 'r', encoding='utf-8') as file:
+                    doc = [Document(page_content=file.read())]
 
-    # Check if the index already exists
-    if os.path.exists(vector_store_file):
-        # Load the saved index
-        try:
-            with open(vector_store_file, 'rb') as f:
-                vector_store = pickle.load(f)
-            return vector_store
-        except PermissionError:
-            # When Permission Error it means it's a FAISS database, use the load_local to get the FAISS DB
-            global embeddings
-            vector_store = FAISS.load_local(vector_store_loc, embeddings, allow_dangerous_deserialization=True)
-    else:
-        # Open the txt file
-        if filetype == 'txt':
-            with open(doc_loc, 'r', encoding='utf-8') as file:
-                doc = [Document(page_content=file.read())]
+                vector_store = VectorstoreIndexCreator(
+                    embedding=self.embeddings,
+                    text_splitter=RecursiveCharacterTextSplitter(chunk_size=350, chunk_overlap=50)
+                ).from_documents(doc)
 
-            # Create vector database from the doc using HF embeddings
-            vector_store = VectorstoreIndexCreator(
-                embedding=embeddings,
-                text_splitter=RecursiveCharacterTextSplitter(chunk_size=350, chunk_overlap=50)
-            ).from_documents(doc)
+                with open(vector_store_file, 'wb') as f:
+                    pickle.dump(vector_store, f)
 
-            # Save the index for future use
-            with open(vector_store_file, 'wb') as f:
-                pickle.dump(index, f)
+            elif filetype == 'pdf':
+                loader = PyPDFLoader(doc_loc)
 
-        # Open the pdf file
-        elif filetype == 'pdf':
-            loader = PyPDFLoader(doc_loc)
+                if method == 'reg':
+                    loader = [loader]
 
-            # regular vector store
-            if method == 'reg':
-              # Change loader to list
-              loader = [loader]
+                    vector_store = VectorstoreIndexCreator(
+                        embedding=self.embeddings,
+                        text_splitter=RecursiveCharacterTextSplitter(chunk_size=350, chunk_overlap=50)
+                    ).from_loaders(loader)
 
-              # Create vector database from the loader using HF embeddings
-              vector_store = VectorstoreIndexCreator(
-                  embedding=embeddings,
-                  text_splitter=RecursiveCharacterTextSplitter(chunk_size=350, chunk_overlap=50)
-              ).from_loaders(loader)
+                    with open(vector_store_file, 'wb') as f:
+                        pickle.dump(vector_store, f)
 
-              # Save the index for future use
-              with open(vector_store_file, 'wb') as f:
-                  pickle.dump(index, f)
+                elif method == 'FAISS':
+                    pages = loader.load_and_split()
+                    vector_store = FAISS.from_documents(pages, self.embeddings)
+                    vector_store.save_local(vector_store_loc)
 
-            # FAISS 
-            elif method == 'FAISS':
-              # Get page_content 
-              pages = loader.load_and_split()
+        return vector_store
 
-              # Create the Vector Store
-              # index = faiss.IndexFlatL2(len(embeddings.embed_query("hello world")))
-              vector_store = FAISS.from_documents(pages, embeddings)
+    def load_saved_index(self, index_file):
+        if os.path.exists(index_file):
+            with open(index_file, 'rb') as f:
+                index = pickle.load(f)
+            return index
+        else:
+            raise FileNotFoundError(f"Index file {index_file} not found. Please create the index first.")
 
-              # Save the FAISS
-              vector_store.save_local(vector_store_loc)
+    def create_retrieval_chain(self, vector_store_loc, filetype='pdf', method='FAISS'):
+        index = self.load_doc(self.doc_loc, vector_store_loc, filetype, method)
 
-    # Return the vectorDB
-    return vector_store
+        retriever = index.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": 3},
+        )
 
-# Function to load the saved index
-def load_saved_index(index_file):
-    # Check if the index file exists
-    if os.path.exists(index_file):
-        # Load the saved index
-        with open(index_file, 'rb') as f:
-            index = pickle.load(f)
-        return index
-    else:
-        raise FileNotFoundError(f"Index file {index_file} not found. Please create the index first.")
+        retrieval_qa_chat_prompt = ChatPromptTemplate.from_template(
+            """
+            Answer the following question based only on the provided context. 
+            Think step by step before providing a detailed answer. 
+            DO NOT WRITE A QUESTION, JUST GIVE THE ANSWER IN A DETAILED MANNER
+            <context>
+            {context}
+            </context>
+            Question: {input}
+            """
+        )
 
-# get document location
-doc_loc = os.getenv('DOC_LOC')
-
-# create the vectorDB
-# index = load_saved_index(doc_loc)
-index = load_doc(doc_loc,'DB/ecommerce_300_index','pdf','FAISS')
-
-# load the retriever
-retriever = index.as_retriever(
-    search_type="similarity",
-    search_kwargs={"k": 3},
-)
-
-# Load the Prompt Template
-retrieval_qa_chat_prompt = ChatPromptTemplate.from_template(
-    """
-    Answer the following question based only on the provided context. 
-    Think step by step before providing a detailed answer. 
-    DO NOT WRITE A QUESTION, JUST GIVE THE ANSWER IN A DETAILED MANNER
-    <context>
-    {context}
-    </context>
-    Question: {input}
-    """
-)
-
-# Create the chain
-combine_docs_chain = create_stuff_documents_chain(
-    llm, retrieval_qa_chat_prompt 
-)
-
-# Add the retriever
-retrieval_chain = create_retrieval_chain(retriever, combine_docs_chain)
-
-# TODO Fix the stupid answers
+        combine_docs_chain = create_stuff_documents_chain(self.llm, retrieval_qa_chat_prompt)
+        return create_retrieval_chain(retriever, combine_docs_chain)
 
 # Ask a response
 # response = retrieval_chain.invoke({"input": "What is Lift Percentage?"})
